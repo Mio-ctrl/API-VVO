@@ -5,6 +5,39 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Hilfsfunktion für Zeitformatierung im 24h Format
+function formatTime(dateString) {
+    if (!dateString) return null;
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString; // Fallback bei ungültigem Datum
+    
+    return date.toLocaleTimeString('de-DE', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Europe/Berlin'
+    });
+}
+
+// Hilfsfunktion für komplettes Datum/Zeit Format
+function formatDateTime(dateString) {
+    if (!dateString) return null;
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    
+    return date.toLocaleString('de-DE', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Europe/Berlin'
+    });
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -115,8 +148,10 @@ app.get('/departures/:stationId', async (req, res) => {
             line: dep.LineName,
             direction: dep.Direction,
             platform: dep.Platform?.Name,
-            scheduled_time: dep.ScheduledTime,
-            real_time: dep.RealTime,
+            scheduled_time: formatTime(dep.ScheduledTime),
+            scheduled_time_full: formatDateTime(dep.ScheduledTime),
+            real_time: formatTime(dep.RealTime),
+            real_time_full: formatDateTime(dep.RealTime),
             delay: dep.Delay || 0,
             state: dep.State,
             route_changes: dep.RouteChanges || [],
@@ -126,7 +161,7 @@ app.get('/departures/:stationId', async (req, res) => {
         res.json({
             station_id: stationId,
             station_name: data.Name,
-            timestamp: new Date().toISOString(),
+            timestamp: formatDateTime(new Date().toISOString()),
             count: departures.length,
             departures: departures
         });
@@ -166,18 +201,22 @@ app.get('/trip', async (req, res) => {
             duration: route.Duration,
             changes: route.Changes,
             departure: {
-                time: route.PartialRoutes?.[0]?.RegularStops?.[0]?.DepartureTime,
+                time: formatTime(route.PartialRoutes?.[0]?.RegularStops?.[0]?.DepartureTime),
+                time_full: formatDateTime(route.PartialRoutes?.[0]?.RegularStops?.[0]?.DepartureTime),
                 station: route.PartialRoutes?.[0]?.RegularStops?.[0]?.Name
             },
             arrival: {
-                time: route.PartialRoutes?.[route.PartialRoutes.length - 1]?.RegularStops?.slice(-1)[0]?.ArrivalTime,
+                time: formatTime(route.PartialRoutes?.[route.PartialRoutes.length - 1]?.RegularStops?.slice(-1)[0]?.ArrivalTime),
+                time_full: formatDateTime(route.PartialRoutes?.[route.PartialRoutes.length - 1]?.RegularStops?.slice(-1)[0]?.ArrivalTime),
                 station: route.PartialRoutes?.[route.PartialRoutes.length - 1]?.RegularStops?.slice(-1)[0]?.Name
             },
             parts: route.PartialRoutes?.map(part => ({
                 line: part.Mot?.Name,
                 direction: part.Direction,
-                departure_time: part.RegularStops?.[0]?.DepartureTime,
-                arrival_time: part.RegularStops?.slice(-1)[0]?.ArrivalTime,
+                departure_time: formatTime(part.RegularStops?.[0]?.DepartureTime),
+                departure_time_full: formatDateTime(part.RegularStops?.[0]?.DepartureTime),
+                arrival_time: formatTime(part.RegularStops?.slice(-1)[0]?.ArrivalTime),
+                arrival_time_full: formatDateTime(part.RegularStops?.slice(-1)[0]?.ArrivalTime),
                 duration: part.Duration
             })) || []
         })) || [];
@@ -185,7 +224,7 @@ app.get('/trip', async (req, res) => {
         res.json({
             from: from,
             to: to,
-            timestamp: new Date().toISOString(),
+            timestamp: formatDateTime(new Date().toISOString()),
             count: trips.length,
             trips: trips
         });
@@ -266,7 +305,7 @@ app.get('/stops/:lineId', async (req, res) => {
 app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'OK', 
-        timestamp: new Date().toISOString() 
+        timestamp: formatDateTime(new Date().toISOString())
     });
 });
 
