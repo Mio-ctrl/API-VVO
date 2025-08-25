@@ -5,12 +5,32 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Hilfsfunktion für Zeitformatierung im 24h Format
-function formatTime(dateString) {
-    if (!dateString) return null;
+// Hilfsfunktion für VVO .NET Datum Format parsen
+function parseVvoDate(vvoDateString) {
+    if (!vvoDateString) return null;
     
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString; // Fallback bei ungültigem Datum
+    // VVO Format: /Date(1756123920000-0000)/
+    const match = vvoDateString.match(/\/Date\((\d+)([+-]\d{4})?\)\//);
+    if (match) {
+        const timestamp = parseInt(match[1]);
+        return new Date(timestamp);
+    }
+    
+    // Fallback für normale ISO-Strings
+    const date = new Date(vvoDateString);
+    if (!isNaN(date.getTime())) {
+        return date;
+    }
+    
+    return null;
+}
+
+// Hilfsfunktion für Zeitformatierung im 24h Format
+function formatTime(vvoDateString) {
+    if (!vvoDateString) return null;
+    
+    const date = parseVvoDate(vvoDateString);
+    if (!date) return vvoDateString; // Fallback bei ungültigem Datum
     
     return date.toLocaleTimeString('de-DE', {
         hour: '2-digit',
@@ -21,11 +41,11 @@ function formatTime(dateString) {
 }
 
 // Hilfsfunktion für komplettes Datum/Zeit Format
-function formatDateTime(dateString) {
-    if (!dateString) return null;
+function formatDateTime(vvoDateString) {
+    if (!vvoDateString) return null;
     
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
+    const date = parseVvoDate(vvoDateString);
+    if (!date) return vvoDateString;
     
     return date.toLocaleString('de-DE', {
         year: 'numeric',
@@ -36,6 +56,22 @@ function formatDateTime(dateString) {
         hour12: false,
         timeZone: 'Europe/Berlin'
     });
+}
+
+// Hilfsfunktion für relative Zeitangaben (in X Minuten)
+function formatRelativeTime(vvoDateString) {
+    if (!vvoDateString) return null;
+    
+    const date = parseVvoDate(vvoDateString);
+    if (!date) return null;
+    
+    const now = new Date();
+    const diffMinutes = Math.round((date.getTime() - now.getTime()) / (1000 * 60));
+    
+    if (diffMinutes < 0) return 'bereits abgefahren';
+    if (diffMinutes === 0) return 'jetzt';
+    if (diffMinutes === 1) return 'in 1 Minute';
+    return `in ${diffMinutes} Minuten`;
 }
 
 // Middleware
@@ -152,6 +188,7 @@ app.get('/departures/:stationId', async (req, res) => {
             scheduled_time_full: formatDateTime(dep.ScheduledTime),
             real_time: formatTime(dep.RealTime),
             real_time_full: formatDateTime(dep.RealTime),
+            relative_time: formatRelativeTime(dep.RealTime || dep.ScheduledTime),
             delay: dep.Delay || 0,
             state: dep.State,
             route_changes: dep.RouteChanges || [],
@@ -161,7 +198,15 @@ app.get('/departures/:stationId', async (req, res) => {
         res.json({
             station_id: stationId,
             station_name: data.Name,
-            timestamp: formatDateTime(new Date().toISOString()),
+            timestamp: new Date().toLocaleString('de-DE', {
+                year: 'numeric',
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: 'Europe/Berlin'
+            }),
             count: departures.length,
             departures: departures
         });
