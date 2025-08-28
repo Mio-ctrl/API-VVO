@@ -180,27 +180,42 @@ app.get('/departures/:stationId', async (req, res) => {
             isarrival: false
         });
 
-        const departures = data.Departures?.map(dep => ({
-            line: dep.LineName,
-            direction: dep.Direction,
-            platform: dep.Platform?.Name,
-            scheduled_time: formatTime(dep.ScheduledTime),
-            scheduled_time_full: formatDateTime(dep.ScheduledTime),
-            real_time: formatTime(dep.RealTime),
-            real_time_full: formatDateTime(dep.RealTime),
-            relative_time: formatRelativeTime(dep.RealTime || dep.ScheduledTime),
-            delay: dep.Delay || 0,
-            state: dep.State,
-            route_changes: dep.RouteChanges || [],
-            low_floor: dep.Diva?.number ? true : false
-        })) || [];
+        const departures = data.Departures?.map(dep => {
+            const scheduledDate = parseVvoDate(dep.ScheduledTime);
+            const realDate = parseVvoDate(dep.RealTime);
+            
+            // Berechnung des Delays in Minuten, falls beide Zeiten vorhanden sind
+            let calculatedDelay = 0;
+            if (scheduledDate && realDate) {
+                // Die Differenz in Millisekunden
+                const diffMilliseconds = realDate.getTime() - scheduledDate.getTime();
+                // Konvertierung von Millisekunden in Minuten und Runden auf die nächste Ganzzahl
+                calculatedDelay = Math.round(diffMilliseconds / (1000 * 60));
+            }
+
+            return {
+                line: dep.LineName,
+                direction: dep.Direction,
+                platform: dep.Platform?.Name,
+                scheduled_time: formatTime(dep.ScheduledTime),
+                scheduled_time_full: formatDateTime(dep.ScheduledTime),
+                real_time: formatTime(dep.RealTime),
+                real_time_full: formatDateTime(dep.RealTime),
+                relative_time: formatRelativeTime(dep.RealTime || dep.ScheduledTime),
+                // Jetzt verwenden wir unseren berechneten Wert
+                delay: calculatedDelay || 0,
+                state: dep.State,
+                route_changes: dep.RouteChanges || [],
+                low_floor: dep.Diva?.number ? true : false
+            };
+        }) || [];
 
         res.json({
             station_id: stationId,
             station_name: data.Name,
             timestamp: new Date().toLocaleString('de-DE', {
                 year: 'numeric',
-                month: '2-digit', 
+                month: '2-digit',
                 day: '2-digit',
                 hour: '2-digit',
                 minute: '2-digit',
@@ -212,9 +227,9 @@ app.get('/departures/:stationId', async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Fehler beim Abrufen der Abfahrten',
-            message: error.message 
+            message: error.message
         });
     }
 });
